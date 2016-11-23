@@ -1,0 +1,9 @@
+## Interface: 11200
+## Title: Dragon Overlay
+## Version: 1.93
+## Author: Azilroka / RoadBlock (pfUI)
+## Notes: Provides an overlay on UnitFrames for Boss/Elite/Rare/RareElite
+## SavedVariables: DragonOverlayOptions
+## RequiredDeps: pfUI
+
+DragonOverlay.lua
