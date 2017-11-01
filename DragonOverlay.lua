@@ -1,13 +1,22 @@
 local DragonOverlay = CreateFrame('Frame', 'DragonOverlay', UIParent)
+DragonOverlay.EventManager = function()
+	this:Hide()
+	return this[event]~=nil and this[event](this,event,arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10,arg11)
+end
+DragonOverlay:SetScript('OnEvent', DragonOverlay.EventManager)
+DragonOverlay:RegisterEvent('VARIABLES_LOADED')
+DragonOverlay:RegisterEvent('PLAYER_LOGIN')
+DragonOverlay.Hooks = {}
 local TargetFrame
 
-DragonOverlayOptions = {
+local defaults = {
 	['worldboss'] = 'ClassicBoss',
 	['elite'] = 'ClassicElite',
 	['rare'] = 'ClassicRare',
 	['rareelite'] = 'ClassicRareElite',
 	['ClassIcon'] = "1",
 	['FlipDragon'] = "0",
+	['Enable'] = "1"
 }
 
 DragonOverlay.Textures = {
@@ -26,6 +35,23 @@ DragonOverlay.Textures = {
 	['ClassicRareElite'] = 'Interface\\AddOns\\DragonOverlay\\Textures\\ClassicRareElite',
 	['ClassicRare'] = 'Interface\\AddOns\\DragonOverlay\\Textures\\ClassicRare',
 	['ClassicBoss'] = 'Interface\\AddOns\\DragonOverlay\\Textures\\ClassicBoss',
+}
+DragonOverlay.TextureIndex = {
+	"Azure",
+	"Chromatic",
+	"Crimson",
+	"Golden",
+	"Jade",
+	"Onyx",
+	"HeavenlyBlue",
+	"HeavenlyCrimson",
+	"HeavenlyGolden",
+	"HeavenlyJade",
+	"HeavenlyOnyx",
+	"ClassicElite",
+	"ClassicRareElite",
+	"ClassicRare",
+	"ClassicBoss"	
 }
 
 DragonOverlay.ClassTextures = {}
@@ -62,57 +88,30 @@ function DragonOverlay:Update()
 	self:GetScript('OnEvent')(self, 'PLAYER_TARGET_CHANGED')
 end
 
-function DragonOverlay:GetOptions()
-	if not pfUI and pfUI.gui and pfUI.gui.CreateConfigTab and pfUI.gui.CreateConfig then return end
-	local texValues = {
-		"Azure",
-		"Chromatic",
-		"Crimson",
-		"Golden",
-		"Jade",
-		"Onyx",
-		"HeavenlyBlue",
-		"HeavenlyCrimson",
-		"HeavenlyGolden",
-		"HeavenlyJade",
-		"HeavenlyOnyx",
-		"ClassicElite",
-		"ClassicRareElite",
-		"ClassicRare",
-		"ClassicBoss"
-	}
-	if not pfUI.gui.dragonoverlay then
-		pfUI.gui.dragonoverlay = pfUI.gui:CreateConfigTab("|cffDA70D6"..GetAddOnMetadata('DragonOverlay', 'Title').."|r")	
-		pfUI.gui:CreateConfig(pfUI.gui.dragonoverlay, "Class Icon", DragonOverlayOptions, "ClassIcon", "checkbox")
-		pfUI.gui:CreateConfig(pfUI.gui.dragonoverlay, "Flip Dragon", DragonOverlayOptions, "FlipDragon", "checkbox")
-		local dd = {}
-		table.insert(dd,pfUI.gui:CreateConfig(pfUI.gui.dragonoverlay, "Rare", DragonOverlayOptions, "rare", "dropdown", texValues))
-		table.insert(dd,pfUI.gui:CreateConfig(pfUI.gui.dragonoverlay, "Elite", DragonOverlayOptions, "elite", "dropdown", texValues))
-		table.insert(dd,pfUI.gui:CreateConfig(pfUI.gui.dragonoverlay, "Rare Elite", DragonOverlayOptions, "rareelite", "dropdown", texValues))
-		table.insert(dd,pfUI.gui:CreateConfig(pfUI.gui.dragonoverlay, "World Boss", DragonOverlayOptions, "worldboss", "dropdown", texValues))
-		for _,opt in pairs(dd) do -- no idea why these specific dropdowns are drawn misaligned
-			opt.input:ClearAllPoints()
-			opt.input:SetPoint("TOPRIGHT", -30, 0)
-			opt.input.point = "TOPRIGHT"
-			opt.input.relativePoint = "TOPRIGHT"
-		end
-		if pfUI.gui.elements then
-			local found = false
-			for k,v in pairs(pfUI.gui.elements) do
-				if v == pfUI.gui.dragonoverlay then
-					found = true
-					break
-				end
-			end
-			if not found then 
-				table.insert(pfUI.gui.elements, pfUI.gui.dragonoverlay)
-			end
-		end
+function DragonOverlay:AddOptions()
+	if not (pfUI 
+	and pfUI.gui 
+	and pfUI.gui.tabs 
+	and pfUI.gui.tabs.uf
+	and pfUI.gui.tabs.uf.tabs
+	and pfUI.gui.tabs.uf.tabs.target) then 
+		return 
+	end
+
+	local parent = pfUI.gui.tabs.uf.tabs.target
+	if (parent) and (not parent._dragonoverlay) then
+		self.Hooks.OnShow = parent:GetScript("OnShow")
+		parent:SetScript("OnShow",function() DragonOverlay.pfUI_AddOptions(parent) end)
+		parent._dragonoverlay = true
 	end
 end
 
 function DragonOverlay:SetOverlay(Texture)
-	if UnitIsPlayer('target') and DragonOverlayOptions['ClassIcon']=="1" then
+	if not (DragonOverlayOptions.Enable=="1") then
+		self:Hide()
+		return
+	end
+	if UnitIsPlayer('target') and (not UnitIsUnit('target','player')) and DragonOverlayOptions['ClassIcon']=="1" then
 		local _,Class = UnitClass('target')
 		self:SetWidth(24)
 		self:SetHeight(24)
@@ -120,8 +119,9 @@ function DragonOverlay:SetOverlay(Texture)
 		self.Texture:SetTexCoord(unpack(DragonOverlay.ClassTextures[Class]))
 	else
 		if Texture and string.find(Texture, 'Classic') then
-			self:SetWidth(80)
-			self:SetHeight(80)
+			local size = TargetFrame:GetHeight()/TargetFrame:GetEffectiveScale()
+			self:SetWidth(size or 80)
+			self:SetHeight(size or 80)
 		else
 			self:SetWidth(128)
 			self:SetHeight(32)
@@ -134,33 +134,35 @@ function DragonOverlay:SetOverlay(Texture)
 	if Texture and string.find(Texture, 'Classic') then
 		self:SetPoint('CENTER', TargetFrame, (DragonOverlayOptions['FlipDragon']=="1" and 'RIGHT' or 'LEFT'), (DragonOverlayOptions['FlipDragon']=="1" and -17 or 17), 0)
 	else
-		self:SetPoint('CENTER', TargetFrame, 'TOP', 0, 5)
+		self:SetPoint('CENTER', TargetFrame, 'TOP', 25, 5)
 	end
 
 	self:Show()
 end
 
-DragonOverlay:RegisterEvent('PLAYER_LOGIN')
-DragonOverlay:SetScript('OnEvent', function()
-	local self = this
-	self:Hide()
-	if event == 'PLAYER_LOGIN' then
-		TargetFrame = pfUI and pfUI.uf and pfUI.uf.target
-		if not TargetFrame then return end
+function DragonOverlay:PLAYER_LOGIN(event)
+	TargetFrame = pfUI and pfUI.uf and pfUI.uf.target
+	if not TargetFrame then return end
+	DragonOverlayOptions = DragonOverlayOptions or defaults
+	self:AddOptions()
 
-		self:GetOptions()
-
-		self.Texture = self:CreateTexture(nil, 'ARTWORK')
-		self.Texture:SetAllPoints()
-		self:SetParent(TargetFrame)
-		self:SetFrameLevel(12)
-		self:RegisterEvent('PLAYER_TARGET_CHANGED')
+	self.Texture = self:CreateTexture(nil, 'ARTWORK')
+	self.Texture:SetAllPoints()
+	self:SetParent(TargetFrame)
+	self:SetFrameLevel(12)
+	self:RegisterEvent('PLAYER_TARGET_CHANGED')	
+end
+function DragonOverlay:VARIABLES_LOADED(event)
+  if UnitIsConnected("player") then
+    self:UnregisterEvent("PLAYER_LOGIN")
+    self:PLAYER_LOGIN("PLAYER_LOGIN")
+  end	
+end
+function DragonOverlay:PLAYER_TARGET_CHANGED()
+	local TargetClass = UnitClassification('target')
+	if TargetClass == 'normal' then
+		self:SetOverlay(nil)
 	else
-		local TargetClass = UnitClassification('target')
-		if TargetClass == 'normal' then
-			self:SetOverlay(nil)
-		else
-			self:SetOverlay(DragonOverlay.Textures[DragonOverlayOptions[TargetClass]])
-		end
-	end
-end)
+		self:SetOverlay(DragonOverlay.Textures[DragonOverlayOptions[TargetClass]])
+	end	
+end
